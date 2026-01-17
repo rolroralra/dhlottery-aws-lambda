@@ -5,36 +5,42 @@ AWS Lambda를 이용한 로또 자동 구매 시스템
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         AWS Cloud                               │
-│                                                                 │
-│  ┌──────────────┐     ┌──────────────────┐     ┌──────────────┐ │
-│  │  EventBridge │────>│  Lambda Function │────>│  dhlottery   │ │
-│  │  (Scheduler) │     │  (lotto-auto)    │     │  .co.kr      │ │
-│  │  Mon 15:00   │     └────────┬─────────┘     └──────────────┘ │
-│  └──────────────┘              │                                │
-│                                │                                │
-│                     ┌──────────┴──────────┐                     │
-│                     │                     │                     │
-│                     v                     v                     │
-│             ┌──────────────┐      ┌──────────────┐              │
-│             │   Secrets    │      │     SNS      │              │
-│             │   Manager    │      │   (알림)      │              │
-│             │  (계정정보)    │      └──────┬───────┘              │
-│             └──────────────┘             │                      │
-│                                          v                      │
-│                     ┌──────────────┐  ┌──────────┐              │
-│                     │     SQS      │  │  Email   │              │
-│                     │    (DLQ)     │  │  알림     │              │
-│                     └──────────────┘  └──────────┘              │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                            AWS Cloud                                │
+│                                                                     │
+│  ┌──────────────┐                                                   │
+│  │     ECR      │ <── Docker Image (Selenium + Chrome)              │
+│  │  (Registry)  │                                                   │
+│  └──────┬───────┘                                                   │
+│         │                                                           │
+│         v                                                           │
+│  ┌──────────────┐     ┌──────────────────┐     ┌──────────────┐     │
+│  │  EventBridge │────>│  Lambda Function │────>│  dhlottery   │     │
+│  │  (Scheduler) │     │  (Container)     │     │  .co.kr      │     │
+│  │  Mon 15:00   │     └────────┬─────────┘     └──────────────┘     │
+│  └──────────────┘              │                                    │
+│                                │                                    │
+│                     ┌──────────┴──────────┐                         │
+│                     │                     │                         │
+│                     v                     v                         │
+│             ┌──────────────┐      ┌──────────────┐                  │
+│             │   Secrets    │      │     SNS      │                  │
+│             │   Manager    │      │   (알림)      │                  │
+│             │  (계정정보)    │      └──────┬───────┘                  │
+│             └──────────────┘             │                          │
+│                                          v                          │
+│                     ┌──────────────┐  ┌──────────┐                  │
+│                     │     SQS      │  │  Email   │                  │
+│                     │    (DLQ)     │  │  알림     │                  │
+│                     └──────────────┘  └──────────┘                  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Features
 
 - 매주 월요일 15:00 KST 자동 실행
 - 복수 계정 지원 (단일 Secret에서 관리)
-- 실패 시 이메일 알림
+- 실행 결과 이메일 알림 (성공/실패 모두)
 - Terraform으로 인프라 코드화
 
 ---
@@ -51,7 +57,7 @@ aws sts get-caller-identity
 ./scripts/setup-aws.sh
 ```
 
-### 2. Terraform 배포
+### 2. Terraform/OpenTofu 배포
 
 ```bash
 cd terraform
@@ -59,10 +65,13 @@ cd terraform
 # terraform.tfvars 설정 (선택사항 - 기본값 사용 가능)
 cp terraform.tfvars.example terraform.tfvars
 
-# 초기화 및 배포
-terraform init
-terraform plan
-terraform apply
+# 초기화 및 배포 (terraform 또는 tofu 사용)
+terraform init   # 또는: tofu init
+terraform plan   # 또는: tofu plan
+terraform apply  # 또는: tofu apply
+
+# 또는 배포 스크립트 사용
+cd ../scripts && ./deploy.sh
 ```
 
 ### 3. Secrets Manager에 자격 증명 등록
@@ -105,8 +114,10 @@ lotto-project/
 │   │   ├── handler.py              # Lambda 핸들러 (진입점)
 │   │   ├── lotto.py                # 로또 구매 로직
 │   │   └── secrets_manager.py      # AWS Secrets 유틸
+│   ├── Dockerfile                  # Lambda 컨테이너 이미지 정의
 │   ├── requirements.txt            # Python 의존성
-│   └── build.sh                    # 배포 패키지 빌드
+│   ├── deploy-docker.sh            # Docker 이미지 빌드 및 Lambda 배포
+│   └── build.sh                    # (레거시) ZIP 패키지 빌드
 │
 └── scripts/
     ├── setup-aws.sh                # AWS 초기 설정 (S3, DynamoDB)
@@ -226,8 +237,8 @@ aws sqs receive-message \
   --queue-url https://sqs.ap-northeast-2.amazonaws.com/{account-id}/lotto-automation-dlq-prod
 ```
 
-### Terraform State 문제
+### Terraform/OpenTofu State 문제
 ```bash
 # State lock 강제 해제
-terraform force-unlock {lock-id}
+terraform force-unlock {lock-id}  # 또는: tofu force-unlock {lock-id}
 ```

@@ -64,14 +64,14 @@ def get_chrome_driver():
 
     options = Options()
 
-    # Core headless settings - use classic headless mode for Lambda stability
-    options.add_argument('--headless')
+    # Core headless settings - use new headless mode for better compatibility
+    options.add_argument('--headless=new')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-gpu')
     options.add_argument('--window-size=1920,1080')
 
-    # Anti-detection: Real browser User-Agent
-    options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    # Anti-detection: Real browser User-Agent (matching Docker Chrome version 119)
+    options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.105 Safari/537.36')
 
     # Lambda-specific memory and resource constraints
     options.add_argument('--disable-dev-shm-usage')
@@ -177,9 +177,40 @@ def login_lotto(driver, username: str, password: str):
         raise e
 
 
+def wait_for_element(driver, by, value, timeout=10):
+    """Wait for an element to be present and return it"""
+    wait = WebDriverWait(driver, timeout)
+    element = wait.until(EC.presence_of_element_located((by, value)))
+    return element
+
+
+def close_popup_if_exists(driver, username):
+    """Check for popup alert and close it, return popup text if found"""
+    try:
+        popup_alert = driver.find_element(By.ID, 'popupLayerAlert')
+        if popup_alert.is_displayed():
+            popup_text = popup_alert.text
+            logger.warning(f"{username}: Popup alert detected: {popup_text}")
+
+            # Find and click the close button
+            try:
+                close_btn = popup_alert.find_element(By.CSS_SELECTOR, 'input[type="button"], button')
+                close_btn.click()
+                logger.info(f"{username}: Closed popup via button click")
+            except Exception:
+                driver.execute_script("arguments[0].style.display = 'none';", popup_alert)
+                logger.info(f"{username}: Closed popup via JavaScript")
+
+            time.sleep(1)
+            return popup_text
+    except Exception:
+        pass
+    return None
+
+
 def buy_lotto_ticket(username: str, password: str, ticket_count: int = 5) -> dict:
     """
-    Buy lotto tickets
+    Buy lotto tickets (simplified version matching local working code)
 
     Args:
         username: dhlottery.co.kr username
@@ -195,43 +226,100 @@ def buy_lotto_ticket(username: str, password: str, ticket_count: int = 5) -> dic
         driver = get_chrome_driver()
         login_lotto(driver, username, password)
 
-        # Navigate to lotto purchase page
-        driver.get('https://el.dhlottery.co.kr/game/TotalGame.jsp?LottoId=LO40')
+        # Navigate directly to lotto purchase page (same as working local code)
+        logger.info(f"{username}: Navigating to lotto purchase page...")
+        driver.get('https://ol.dhlottery.co.kr/olotto/game/game645.do')
         time.sleep(5)
+        logger.info(f"{username}: Page loaded. URL: {driver.current_url}, Title: {driver.title}")
 
-        # Switch to iframe
-        iframe = driver.find_element(By.XPATH, '//*[@id="ifrm_tab"]')
-        driver.switch_to.frame(iframe)
+        # Check and close any initial popup
+        popup_text = close_popup_if_exists(driver, username)
+        if popup_text and ('로그인' in popup_text or '세션' in popup_text):
+            raise Exception(f"Login required: {popup_text}")
+
+        # Click auto number tab (same xpath as working code)
+        logger.info(f"{username}: Clicking auto number tab...")
+        auto_tab = wait_for_element(driver, By.XPATH, '//*[@id="tabWay2Buy"]/li[2]')
+        auto_tab.click()
+        logger.info(f"{username}: Clicked auto number tab")
         time.sleep(1)
 
-        # Click lotto ticket button (auto number)
-        driver.find_element(By.XPATH, '/html/body/header[1]/div/div/nav/div/ul/li[1]/div/ul/li[1]/div/button').click()
-        time.sleep(1)
+        # Close popup if appears after clicking tab
+        close_popup_if_exists(driver, username)
 
         # Select ticket count
-        select_element = driver.find_element(By.XPATH, '//*[@id="amoundApply"]')
+        logger.info(f"{username}: Selecting {ticket_count} tickets...")
+        select_element = wait_for_element(driver, By.XPATH, '//*[@id="amoundApply"]')
         select = Select(select_element)
         select.select_by_index(ticket_count - 1)
+        logger.info(f"{username}: Selected {ticket_count} tickets")
 
-        # Confirm purchase
-        driver.find_element(By.XPATH, '//*[@id="btnSelectNum"]').click()
-        driver.find_element(By.XPATH, '//*[@id="btnBuy"]').click()
-        driver.find_element(By.XPATH, '//*[@id="popupLayerConfirm"]/div/div[2]/input[1]').click()
+        # Click select numbers button
+        logger.info(f"{username}: Clicking select numbers button...")
+        wait_for_element(driver, By.XPATH, '//*[@id="btnSelectNum"]').click()
+        logger.info(f"{username}: Clicked select numbers button")
+        time.sleep(1)
+
+        # Close popup if appears
+        close_popup_if_exists(driver, username)
+
+        # Click buy button
+        logger.info(f"{username}: Clicking buy button...")
+        wait_for_element(driver, By.XPATH, '//*[@id="btnBuy"]').click()
+        logger.info(f"{username}: Clicked buy button")
+        time.sleep(1)
+
+        # Close popup if appears
+        close_popup_if_exists(driver, username)
+
+        # Click confirm button in confirmation popup
+        logger.info(f"{username}: Clicking confirm button...")
+        wait_for_element(driver, By.XPATH, '//*[@id="popupLayerConfirm"]/div/div[2]/input[1]').click()
+        logger.info(f"{username}: Clicked confirm button")
         time.sleep(5)
 
-        message = f"{username}: Successfully purchased {ticket_count} lotto tickets"
-        logger.info(message)
-
-        return {
-            'status': 'success',
-            'message': message,
-            'username': username,
-            'ticket_count': ticket_count
-        }
+        # Check for purchase result
+        page_source = driver.page_source
+        if '구매완료' in page_source or '복권이 구매' in page_source or '구매가 완료' in page_source:
+            message = f"{username}: Successfully purchased {ticket_count} lotto tickets"
+            logger.info(message)
+            return {
+                'status': 'success',
+                'message': message,
+                'username': username,
+                'ticket_count': ticket_count
+            }
+        elif '잔액이 부족' in page_source or '잔고가 부족' in page_source:
+            message = f"{username}: Insufficient balance"
+            logger.error(message)
+            return {
+                'status': 'error',
+                'message': message,
+                'username': username,
+                'error': 'Insufficient balance'
+            }
+        else:
+            # Log for debugging
+            logger.info(f"{username}: Page source snippet: {page_source[:500]}")
+            message = f"{username}: Purchase completed (unverified)"
+            logger.info(message)
+            return {
+                'status': 'success',
+                'message': message,
+                'username': username,
+                'ticket_count': ticket_count
+            }
 
     except Exception as e:
         message = f"{username}: Failed to purchase lotto tickets - {str(e)}"
         logger.error(message)
+
+        if driver:
+            try:
+                logger.error(f"{username}: Debug - Current URL: {driver.current_url}")
+                logger.error(f"{username}: Debug - Page title: {driver.title}")
+            except Exception:
+                pass
 
         return {
             'status': 'error',

@@ -117,13 +117,28 @@ def lambda_handler(event, context):
                 logger.error(error_msg)
                 errors.append(error_msg)
 
-        # Send notification if there are errors
-        if errors and sns_topic_arn:
-            send_notification(
-                sns_topic_arn,
-                "[Lotto Automation] Error",
-                "\n".join(errors)
-            )
+        # Send notification
+        if sns_topic_arn:
+            if errors:
+                send_notification(
+                    sns_topic_arn,
+                    "[Lotto Automation] Error",
+                    "\n".join(errors)
+                )
+            else:
+                # Success notification
+                success_message = f"Action: {action}\n"
+                success_message += f"Accounts processed: {len(credentials_list)}\n\n"
+                for result in all_results:
+                    success_message += f"- {result.get('username', 'Unknown')}: {result.get('status', 'Unknown')}\n"
+                    if result.get('message'):
+                        success_message += f"  {result.get('message')}\n"
+
+                send_notification(
+                    sns_topic_arn,
+                    "[Lotto Automation] Success",
+                    success_message
+                )
 
         return {
             'statusCode': 200 if not errors else 500,

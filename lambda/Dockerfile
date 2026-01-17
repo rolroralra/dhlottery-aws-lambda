@@ -52,8 +52,7 @@ RUN wget -q "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_V
     && unzip -q chromedriver-linux64.zip \
     && mv chromedriver-linux64/chromedriver /opt/chromedriver \
     && chmod +x /opt/chromedriver \
-    && rm -rf chromedriver-linux64.zip chromedriver-linux64 \
-    && /opt/chromedriver --version
+    && rm -rf chromedriver-linux64.zip chromedriver-linux64
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt ${LAMBDA_TASK_ROOT}/

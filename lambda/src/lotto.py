@@ -453,24 +453,11 @@ def check_lotto_result(username: str, password: str) -> dict:
         driver.get('https://www.dhlottery.co.kr/mypage/mylotteryledger')
         time.sleep(5)
 
-        # Try to click toggle button if exists
-        try:
-            toggle_btn = driver.find_element(By.XPATH, '//*[@id="srchBtnToggle"]/span[2]')
-            driver.execute_script("arguments[0].click();", toggle_btn)
-            time.sleep(3)
-        except Exception:
-            pass
-
-        # Click 3 months button using JavaScript to avoid click intercept
-        months_btn = driver.find_element(By.XPATH, '//*[@id="containerBox"]/div[2]/div/div/div/form/div[1]/div/div[2]/div/div[2]/div[2]/button[3]')
-        driver.execute_script("arguments[0].scrollIntoView(true);", months_btn)
-        time.sleep(1)
-        driver.execute_script("arguments[0].click();", months_btn)
+        # Click 1 Month button
+        wait_for_element(driver, By.XPATH, '//*[@id="containerBox"]/div[2]/div/div/div/form/div[1]/div/div[2]/div/div/div[2]/div[2]/button[3]').click()
 
         # Click search button
-        search_btn = driver.find_element(By.XPATH, '//*[@id="btnSrch"]')
-        driver.execute_script("arguments[0].click();", search_btn)
-        time.sleep(5)
+        wait_for_element(driver, By.XPATH, '//*[@id="btnSrch"]').click()
 
         result_elements = driver.find_elements(By.XPATH, '//*[@id="winning-history-list"]/ul[2]/li/div[6]/span[2]')
         results = [elem.text.strip() for elem in result_elements]

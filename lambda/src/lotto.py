@@ -455,12 +455,32 @@ def check_lotto_result(username: str, password: str) -> dict:
 
         # Click 1 Month button
         wait_for_element(driver, By.XPATH, '//*[@id="containerBox"]/div[2]/div/div/div/form/div[1]/div/div[2]/div/div/div[2]/div[2]/button[3]').click()
+        time.sleep(1)
 
         # Click search button
         wait_for_element(driver, By.XPATH, '//*[@id="btnSrch"]').click()
 
+        # Wait for search results to load after button click
+        time.sleep(3)
+
+        # Wait for the result list container to be present
+        wait = WebDriverWait(driver, 10)
+        try:
+            wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="winning-history-list"]')))
+        except Exception:
+            logger.info(f"{username}: Result list not found, may be empty")
+
+        # Re-fetch elements and extract text in a stale-safe manner
+        results = []
         result_elements = driver.find_elements(By.XPATH, '//*[@id="winning-history-list"]/ul[2]/li/div[6]/span[2]')
-        results = [elem.text.strip() for elem in result_elements]
+        for i in range(len(result_elements)):
+            try:
+                # Re-find element each time to avoid stale reference
+                elem = driver.find_elements(By.XPATH, '//*[@id="winning-history-list"]/ul[2]/li/div[6]/span[2]')[i]
+                results.append(elem.text.strip())
+            except Exception as e:
+                logger.warning(f"{username}: Failed to get result text at index {i}: {e}")
+                continue
 
         has_winning = any("당첨" in result for result in results)
 

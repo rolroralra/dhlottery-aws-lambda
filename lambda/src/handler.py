@@ -7,7 +7,7 @@ import json
 import logging
 import boto3
 from secrets_manager import get_all_credentials
-from lotto import buy_lotto_ticket, check_lotto_balance, check_lotto_result
+from lotto import buy_lotto_ticket, check_lotto_balance, check_lotto_result, buy_pension_lottery_ticket
 
 # Configure logging
 logger = logging.getLogger()
@@ -87,6 +87,18 @@ def lambda_handler(event, context):
             try:
                 if action == 'buy_ticket':
                     result = buy_lotto_ticket(username, password)
+                    account_results.append(result)
+
+                    # Also check balance after purchase
+                    balance_result = check_lotto_balance(username, password)
+                    account_results.append(balance_result)
+
+                    # Also check result after purchase
+                    check_result = check_lotto_result(username, password)
+                    account_results.append(check_result)
+
+                elif action == 'buy_pension_ticket':
+                    result = buy_pension_lottery_ticket(username, password)
                     account_results.append(result)
 
                     # Also check balance after purchase

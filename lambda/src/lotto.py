@@ -514,3 +514,123 @@ def check_lotto_result(username: str, password: str) -> dict:
     finally:
         if driver:
             driver.quit()
+
+
+def buy_pension_lottery_ticket(username: str, password: str, ticket_count: int = 5) -> dict:
+    """
+    Buy pension lotto tickets (simplified version matching local working code)
+
+    Args:
+        username: dhlottery.co.kr username
+        password: dhlottery.co.kr password
+        ticket_count: Number of tickets to buy (1-5)
+
+    Returns:
+        dict with status and message
+    """
+    driver = None
+
+    try:
+        driver = get_chrome_driver()
+        login_lotto(driver, username, password)
+
+        # Navigate directly to lotto purchase page (same as working local code)
+        logger.info(f"{username}: Navigating to lotto purchase page...")
+        driver.get('https://el.dhlottery.co.kr/game/TotalGame.jsp?LottoId=LP72')
+        time.sleep(5)
+        logger.info(f"{username}: Page loaded. URL: {driver.current_url}, Title: {driver.title}")
+
+        # Check and close any initial popup
+        popup_text = close_popup_if_exists(driver, username)
+        if popup_text and ('로그인' in popup_text or '세션' in popup_text):
+            raise Exception(f"Login required: {popup_text}")
+
+        # Click auto number tab (same xpath as working code)
+        logger.info(f"{username}: Clicking auto number tab...")
+
+        auto_tab = wait_for_element(driver, By.XPATH, '//*[@id="frm"]/div/ul[1]/li[3]/a')
+        auto_tab.click()
+        logger.info(f"{username}: Clicked auto number tab")
+        time.sleep(1)
+
+        # Close popup if appears after clicking tab
+        close_popup_if_exists(driver, username)
+
+        # Select ticket count
+        logger.info(f"{username}: Selecting {ticket_count} tickets...")
+        select_element = wait_for_element(driver, By.XPATH, '//*[@id="repeatRound"]')
+        select = Select(select_element)
+        select.select_by_index(ticket_count - 1)
+        logger.info(f"{username}: Selected {ticket_count} tickets")
+
+        # Close popup if appears
+        close_popup_if_exists(driver, username)
+
+        # Click buy button
+        logger.info(f"{username}: Clicking buy button...")
+        wait_for_element(driver, By.XPATH, '//*[@id="tab2"]/ul/li[5]/a').click()
+        logger.info(f"{username}: Clicked buy button")
+        time.sleep(1)
+
+        # Close popup if appears
+        close_popup_if_exists(driver, username)
+
+        # Click confirm button in confirmation popup
+        logger.info(f"{username}: Clicking confirm button...")
+        wait_for_element(driver, By.XPATH, '//*[@id="resevationConfirm"]/div/div[3]/a[1]').click()
+        logger.info(f"{username}: Clicked confirm button")
+        time.sleep(5)
+
+        # Check for purchase result
+        page_source = driver.page_source
+        if '구매완료' in page_source or '복권이 구매' in page_source or '구매가 완료' in page_source:
+            message = f"{username}: Successfully purchased {ticket_count} lotto tickets"
+            logger.info(message)
+            return {
+                'status': 'success',
+                'message': message,
+                'username': username,
+                'ticket_count': ticket_count
+            }
+        elif '잔액이 부족' in page_source or '잔고가 부족' in page_source:
+            message = f"{username}: Insufficient balance"
+            logger.error(message)
+            return {
+                'status': 'error',
+                'message': message,
+                'username': username,
+                'error': 'Insufficient balance'
+            }
+        else:
+            # Log for debugging
+            logger.info(f"{username}: Page source snippet: {page_source[:500]}")
+            message = f"{username}: Purchase completed (unverified)"
+            logger.info(message)
+            return {
+                'status': 'success',
+                'message': message,
+                'username': username,
+                'ticket_count': ticket_count
+            }
+
+    except Exception as e:
+        message = f"{username}: Failed to purchase lotto tickets - {str(e)}"
+        logger.error(message)
+
+        if driver:
+            try:
+                logger.error(f"{username}: Debug - Current URL: {driver.current_url}")
+                logger.error(f"{username}: Debug - Page title: {driver.title}")
+            except Exception:
+                pass
+
+        return {
+            'status': 'error',
+            'message': message,
+            'username': username,
+            'error': str(e)
+        }
+
+    finally:
+        if driver:
+            driver.quit()

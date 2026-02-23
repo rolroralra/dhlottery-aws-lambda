@@ -166,6 +166,13 @@ aws lambda invoke \
   --cli-binary-format raw-in-base64-out \
   /dev/stdout 2>/dev/null
 
+# Lambda 수동 실행 (연금복권 구매)
+aws lambda invoke \
+  --function-name lotto-automation-prod \
+  --payload '{"action":"buy_pension_ticket"}' \
+  --cli-binary-format raw-in-base64-out \
+  /dev/stdout 2>/dev/null
+
 # 잔액 확인만 실행
 aws lambda invoke \
   --function-name lotto-automation-prod \
@@ -202,11 +209,12 @@ aws logs tail /aws/lambda/lotto-automation-prod --follow
 
 ## Lambda Actions
 
-| Action | 설명 |
-|--------|------|
+| Action | 설명                 |
+|--------|--------------------|
 | `buy_ticket` | 로또 구매 + 잔액 확인 (기본값) |
-| `check_balance` | 잔액 확인만 |
-| `check_result` | 당첨 결과 확인 |
+| `buy_ticket` | 연금 복권 구매   |
+| `check_balance` | 잔액 확인만             |
+| `check_result` | 당첨 결과 확인           |
 
 ---
 

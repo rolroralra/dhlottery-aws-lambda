@@ -516,7 +516,7 @@ def check_lotto_result(username: str, password: str) -> dict:
             driver.quit()
 
 
-def buy_pension_lottery_ticket(username: str, password: str, ticket_count: int = 5) -> dict:
+def buy_pension_lotto(username: str, password: str, ticket_count: int = 5) -> dict:
     """
     Buy pension lotto tickets (simplified version matching local working code)
 
@@ -545,12 +545,15 @@ def buy_pension_lottery_ticket(username: str, password: str, ticket_count: int =
         if popup_text and ('로그인' in popup_text or '세션' in popup_text):
             raise Exception(f"Login required: {popup_text}")
 
-        # Click auto number tab (same xpath as working code)
-        logger.info(f"{username}: Clicking auto number tab...")
+        iframe = wait_for_element(driver, By.XPATH, '//*[@id="ifrm_tab"]')
+        driver.switch_to.frame(iframe)
+
+        # Click reservation tab (same xpath as working code)
+        logger.info(f"{username}: Clicking reservation tab...")
 
         auto_tab = wait_for_element(driver, By.XPATH, '//*[@id="frm"]/div/ul[1]/li[3]/a')
         auto_tab.click()
-        logger.info(f"{username}: Clicked auto number tab")
+        logger.info(f"{username}: Clicked reservation tab")
         time.sleep(1)
 
         # Close popup if appears after clicking tab
@@ -615,6 +618,93 @@ def buy_pension_lottery_ticket(username: str, password: str, ticket_count: int =
 
     except Exception as e:
         message = f"{username}: Failed to purchase lotto tickets - {str(e)}"
+        logger.error(message)
+
+        if driver:
+            try:
+                logger.error(f"{username}: Debug - Current URL: {driver.current_url}")
+                logger.error(f"{username}: Debug - Page title: {driver.title}")
+            except Exception:
+                pass
+
+        return {
+            'status': 'error',
+            'message': message,
+            'username': username,
+            'error': str(e)
+        }
+
+    finally:
+        if driver:
+            driver.quit()
+
+
+def check_pension_lotto_reservation(username: str, password: str) -> dict:
+    """
+    Check reservation of pension lotto tickets (simplified version matching local working code)
+
+    Args:
+        username: dhlottery.co.kr username
+        password: dhlottery.co.kr password
+
+    Returns:
+        dict with status and message
+    """
+    driver = None
+
+    try:
+        driver = webdriver.Chrome()
+        login_lotto(driver, username, password)
+
+        # Navigate directly to lotto purchase page (same as working local code)
+        logger.info(f"{username}: Navigating to lotto purchase page...")
+        driver.get('https://el.dhlottery.co.kr/game/TotalGame.jsp?LottoId=LP72')
+        time.sleep(5)
+        logger.info(f"{username}: Page loaded. URL: {driver.current_url}, Title: {driver.title}")
+
+        # Check and close any initial popup
+        popup_text = close_popup_if_exists(driver, username)
+        if popup_text and ('로그인' in popup_text or '세션' in popup_text):
+            raise Exception(f"Login required: {popup_text}")
+
+        iframe = wait_for_element(driver, By.XPATH, '//*[@id="ifrm_tab"]')
+        driver.switch_to.frame(iframe)
+        time.sleep(1)
+
+        # Click reservation tab (same xpath as working code)
+        logger.info(f"{username}: Clicking reservation tab...")
+        auto_tab = wait_for_element(driver, By.XPATH, '//*[@id="frm"]/div/ul[1]/li[3]/a')
+        auto_tab.click()
+        logger.info(f"{username}: Clicked reservation tab")
+        time.sleep(1)
+
+        # Close popup if appears after clicking tab
+        close_popup_if_exists(driver, username)
+
+        # Select ticket count
+        wait_for_element(driver, By.XPATH, '//*[@id="tab2"]/div[1]/div[1]/div[2]/a[5]').click()
+        wait_for_element(driver, By.XPATH, '//*[@id="tab2"]/div[1]/div[1]/div[1]/a').click()
+        pension_lottery_ticket_status = wait_for_element(driver, By.XPATH, '//*[@id="tab2"]/div[1]/div[2]/ul/li[1]/span[1]').text.strip()
+        logging.info(f"{username}: Pension lottery ticket status: {pension_lottery_ticket_status}")
+
+        if '예약중' in pension_lottery_ticket_status:
+            message = f"{username}: Pension lottery ticket is reserved"
+            logger.info(message)
+            return {
+                'status': 'reserved',
+                'message': message,
+                'username': username
+            }
+        else:
+            message = f"{username}: Pension lottery ticket is not reserved"
+            logger.info(message)
+            return {
+                'status': 'not_reserved',
+                'message': message,
+                'username': username
+            }
+    except Exception as e:
+        message = f"{username}: Failed to check history of pension lottery tickets - {str(e)}"
         logger.error(message)
 
         if driver:

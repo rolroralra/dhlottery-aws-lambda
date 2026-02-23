@@ -7,7 +7,7 @@ import json
 import logging
 import boto3
 from secrets_manager import get_all_credentials
-from lotto import buy_lotto_ticket, check_lotto_balance, check_lotto_result, buy_pension_lottery_ticket
+from lotto import buy_lotto_ticket, check_lotto_balance, check_lotto_result, buy_pension_lotto, check_pension_lotto_reservation
 
 # Configure logging
 logger = logging.getLogger()
@@ -89,6 +89,12 @@ def lambda_handler(event, context):
                     result = buy_lotto_ticket(username, password)
                     account_results.append(result)
 
+                    check_result = check_pension_lotto_reservation(username, password)
+                    if check_result['status'] != 'reserved':
+                        account_results.append(
+                            buy_pension_lotto(username, password)
+                        )
+
                     # Also check balance after purchase
                     balance_result = check_lotto_balance(username, password)
                     account_results.append(balance_result)
@@ -98,15 +104,10 @@ def lambda_handler(event, context):
                     account_results.append(check_result)
 
                 elif action == 'buy_pension_ticket':
-                    result = buy_pension_lottery_ticket(username, password)
+                    result = buy_pension_lotto(username, password)
                     account_results.append(result)
 
-                    # Also check balance after purchase
-                    balance_result = check_lotto_balance(username, password)
-                    account_results.append(balance_result)
-
-                    # Also check result after purchase
-                    check_result = check_lotto_result(username, password)
+                    check_result = check_pension_lotto_reservation(username, password)
                     account_results.append(check_result)
 
                 elif action == 'check_balance':
